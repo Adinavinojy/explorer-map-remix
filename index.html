@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Explorer Map Remix</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    #unlockBtn {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <button id="unlockBtn">Unlock Places</button>
+  <div id="map"></div>
+
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"
+    async
+    defer>
+  </script>
+
+  <script>
+    let map;
+    let service;
+    let unlocked = false;
+
+    function initMap() {
+      // Start location (Kochi)
+      const center = { lat: 9.9312, lng: 76.2673 };
+
+      // Roads-only style
+      const styledMap = new google.maps.StyledMapType(
+        [
+          { featureType: "poi", stylers: [{ visibility: "off" }] },
+          { featureType: "transit", stylers: [{ visibility: "off" }] }
+        ],
+        { name: "Roads Only" }
+      );
+
+      // Map init
+      map = new google.maps.Map(document.getElementById("map"), {
+        center,
+        zoom: 15,
+        mapTypeControlOptions: {
+          mapTypeIds: ["roadmap", "styled_map"],
+        },
+      });
+
+      // Apply style
+      map.mapTypes.set("styled_map", styledMap);
+      map.setMapTypeId("styled_map");
+
+      // Places Service
+      service = new google.maps.places.PlacesService(map);
+    }
+
+    // Unlock POIs when button clicked
+    document.getElementById("unlockBtn").addEventListener("click", () => {
+      if (unlocked) return;
+      unlocked = true;
+
+      const request = {
+        location: { lat: 9.9312, lng: 76.2673 },
+        radius: 500,
+        type: ["restaurant"]
+      };
+
+      service.nearbySearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          results.forEach(place => {
+            new google.maps.Marker({
+              map,
+              position: place.geometry.location,
+              title: place.name,
+            });
+          });
+        }
+      });
+    });
+
+    // Init map after script loads
+    window.initMap = initMap;
+  </script>
+</body>
+</html>
