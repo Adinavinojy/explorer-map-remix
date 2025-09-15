@@ -35,3 +35,20 @@ Quests: “Visit 5 new cafés this week.”
 AR animations for place reveal.
 
 This is a concept project built to explore gamification of maps and navigation apps.
+
+Running the Prototypes
+
+Both the Python and HTML prototypes use Google APIs.  
+To run them, you need your own Google Maps/Places API key.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).  
+2. Create a new project.  
+3. Enable **Maps JavaScript API** and **Places API**.  
+4. Generate an API key.  
+5. Replace `"YOUR_API_KEY"` in:
+   - `prototype.py` → replace `API_KEY = "YOUR_GOOGLE_PLACES_API_KEY"`  
+   - `index.html` → replace `key=YOUR_API_KEY` in the script tag.  
+
+Now run:
+- `prototype.py` → fetches nearby places in terminal.  
+- `index.html` → open in a browser to see the map demo.
