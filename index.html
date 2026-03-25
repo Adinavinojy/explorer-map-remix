@@ -1,100 +1,282 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Explorer Map Remix</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
-    #unlockBtn {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      background: #007BFF;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 16px;
-      z-index: 5;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Explorer — Adventure Map</title>
+  <meta name="description" content="Discover hidden places as you explore. Fog-of-war adventure map with points and leaderboards." />
+
+  <!-- PWA / Android -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6c63ff" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- iOS Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Explorer" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- App CSS -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <button id="unlockBtn">Unlock Places</button>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MAP + FOG CANVAS
+  ════════════════════════════════════════════════════════════ -->
   <div id="map"></div>
+  
+  <!-- SVG Mask Engine -->
+  <svg width="0" height="0" style="position:absolute; pointer-events: none;">
+    <defs>
+      <mask id="fog-mask">
+        <rect x="0" y="0" width="100%" height="100%" fill="white" />
+        <g id="fog-holes"></g>
+      </mask>
+    </defs>
+  </svg>
+  
+  <!-- The actual fog layer using CSS backdrop-filter -->
+  <div id="fogOverlay" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 400; mask: url(#fog-mask); -webkit-mask: url(#fog-mask); transition: backdrop-filter 0.5s, background 0.5s;"></div>
 
-  <script
-    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places"
-    async
-    defer>
-  </script>
 
+  <!-- ═══════════════════════════════════════════════════════════
+       TOP BAR
+  ════════════════════════════════════════════════════════════ -->
+  <header id="topbar">
+    <div class="logo">
+      <span class="icon">🧭</span>
+      <span>Explor<span>er</span></span>
+    </div>
+
+    <div class="actions">
+      <!-- Score Chip -->
+      <div id="scoreChip" title="Leaderboard" role="button" aria-label="Open Leaderboard">
+        <span class="score-icon" id="scoreBadge">🌱</span>
+        <div>
+          <div class="score-val" id="scoreVal">0</div>
+          <div class="score-label">points</div>
+        </div>
+      </div>
+
+      <!-- Discoveries toggle -->
+      <button class="icon-btn" id="discoverBtn" title="Discoveries" aria-label="Toggle discoveries">🏅</button>
+      <!-- Leaderboard toggle -->
+      <button class="icon-btn" id="leaderboardBtn" title="Leaderboard" aria-label="Toggle leaderboard">🏆</button>
+      <!-- Pan / Move toggle -->
+      <button class="icon-btn" id="panBtn" title="Move Mode — click map to teleport" aria-label="Toggle pan mode">👆</button>
+      <!-- GPS btn -->
+      <button class="icon-btn" id="gpsBtn" title="Center / Enable GPS" aria-label="GPS">📍</button>
+      <!-- Info toggle -->
+      <button class="icon-btn" id="infoBtn" title="How to Play" aria-label="Info">ℹ️</button>
+      <!-- Settings -->
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Toggle settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SETTINGS PANEL (LEFT)
+  ════════════════════════════════════════════════════════════ -->
+  <aside class="side-panel left" id="settingsPanel">
+    <div class="panel-header">
+      <h2>⚙️ Settings</h2>
+      <button class="panel-close" id="settingsClose" aria-label="Close settings">✕</button>
+    </div>
+    <div class="panel-body">
+
+      <!-- Discovery Threshold -->
+      <div class="setting-section">
+        <h3>Discovery Threshold</h3>
+        <div class="threshold-group">
+          <div class="threshold-display">
+            <span class="threshold-value" id="thresholdDisplay">150</span>
+            <span class="threshold-unit">meters</span>
+          </div>
+          <div class="threshold-presets">
+            <button class="preset-btn active" data-val="100">100m</button>
+            <button class="preset-btn" data-val="150">150m</button>
+            <button class="preset-btn" data-val="300">300m</button>
+            <button class="preset-btn" data-val="500">500m</button>
+            <button class="preset-btn" data-val="1000">1km</button>
+          </div>
+          <input type="range" id="thresholdSlider" min="50" max="3000" step="25" value="150"
+                 aria-label="Discovery threshold in meters" />
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;line-height:1.5">
+          Places within this radius of your position will be revealed from the fog.
+        </p>
+      </div>
+
+      <!-- Theme -->
+      <div class="setting-section">
+        <h3>Map Theme</h3>
+        <select id="themeSelect" class="styled-input" style="width:100%; padding:8px;">
+          <option value="auto">Auto (Day/Night)</option>
+          <option value="day">Day Mode</option>
+          <option value="night">Night Mode</option>
+        </select>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;line-height:1.5">
+          Controls the fog style and lighting. Auto follows your local time.
+        </p>
+      </div>
+
+      <!-- Player Name -->
+      <div class="setting-section">
+        <h3>Your Profile</h3>
+        <label style="font-size:0.82rem;color:var(--text-secondary)">Player Name</label>
+        <input class="styled-input" id="playerNameInput" type="text" placeholder="Enter your name" maxlength="20" />
+      </div>
+
+      <!-- Simulate Mode -->
+      <div class="setting-section">
+        <h3>Mode</h3>
+        <div class="setting-row">
+          <label for="simToggle">Simulate Walk (click-to-move)</label>
+          <div class="toggle-wrap">
+            <label class="toggle">
+              <input type="checkbox" id="simToggle" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;line-height:1.5">
+          When OFF, your real GPS location is used. Toggle ON for desktop testing.
+        </p>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="setting-section" style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
+        <h3 style="color: #ff6b6b">Danger Zone</h3>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">Clear all points, discoveries, and reset your session.</p>
+        <button id="resetBtn" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ff6b6b; background: rgba(255,107,107,0.1); color: #ff6b6b; cursor: pointer; font-weight: 600; text-transform: uppercase;">Reset Game Data</button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       INFO / HOW TO PLAY PANEL (LEFT)
+  ════════════════════════════════════════════════════════════ -->
+  <aside class="side-panel left hidden" id="infoPanel">
+    <div class="panel-header">
+      <h2>ℹ️ How to Play</h2>
+      <button class="panel-close" id="infoClose" aria-label="Close info">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="setting-section">
+        <h3>Welcome to Explorer!</h3>
+        <p style="font-size:0.85rem; color:var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+          The map is covered in a dense <b>Fog of War</b>. It's up to you to uncover the hidden world by traveling to new locations!
+        </p>
+        
+        <h4 style="margin: 1rem 0 0.5rem; color:var(--accent2)">📍 Moving Around</h4>
+        <ul style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6; padding-left: 1rem; margin-bottom: 1rem;">
+          <li><b>Simulate Mode (👆):</b> Click anywhere on the map to teleport your player dot.</li>
+          <li><b>GPS Mode:</b> Turn off Simulate Mode in Settings to track your actual real-world location. The map will follow you automatically!</li>
+          <li><b>Pan Mode (✋):</b> Toggle this mode at the top to drag and scroll the map without moving your player.</li>
+        </ul>
+
+        <h4 style="margin: 1rem 0 0.5rem; color:var(--accent2)">🔍 Discoveries</h4>
+        <ul style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6; padding-left: 1rem; margin-bottom: 1rem;">
+          <li>Whenever you enter the radius of a hidden point of interest (POI), you will <b>discover it</b> and earn points.</li>
+          <li>You can change your <b>Discovery Threshold</b> (radius) in the Settings panel. A smaller radius is more challenging!</li>
+        </ul>
+
+        <h4 style="margin: 1rem 0 0.5rem; color:var(--accent2)">🏆 Leaderboard</h4>
+        <ul style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6; padding-left: 1rem;">
+          <li>As you earn points, you'll rank up against rival explorers and unlock new badges (from Sprout 🌱 to Legend 🏆).</li>
+        </ul>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       LEADERBOARD PANEL (RIGHT)
+  ════════════════════════════════════════════════════════════ -->
+  <aside class="side-panel right hidden" id="leaderboardPanel">
+    <div class="panel-header">
+      <h2>🏆 Leaderboard</h2>
+      <button class="panel-close" id="leaderboardClose" aria-label="Close leaderboard">✕</button>
+    </div>
+    <div class="panel-body">
+
+      <!-- My card -->
+      <div class="lb-me-card">
+        <div class="avatar" id="lbMeAvatar">E</div>
+        <div class="info">
+          <div class="name" id="lbMeName">Explorer</div>
+          <div class="stats">
+            <div class="stat">⭐ <strong id="lbMePts">0</strong> pts</div>
+            <div class="stat">📍 <strong id="lbMeDisc">0</strong> found</div>
+          </div>
+          <div style="margin-top:6px;font-size:0.78rem;color:var(--accent2)" id="lbMeBadge">🌱 Sprout</div>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div class="lb-list" id="lbList">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       DISCOVERIES PANEL (BOTTOM CENTER)
+  ════════════════════════════════════════════════════════════ -->
+  <div id="discoveryPanel" class="hidden">
+    <div class="discovery-header">
+      <h2>🏅 Discoveries <span id="discCount" style="color:var(--accent2)">0</span></h2>
+      <button class="panel-close" id="discoveryClose" aria-label="Close discoveries">✕</button>
+    </div>
+    <div id="discoveryList">
+      <div class="empty-discover">Move around to discover new places!</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SIMULATE MODE HINT
+  ════════════════════════════════════════════════════════════ -->
+  <div id="simHint">
+    <span>👆</span> Click anywhere on the map to move
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STATS BAR (bottom-left)
+  ════════════════════════════════════════════════════════════ -->
+  <div id="statsBar">
+    <div class="stat-pill">
+      <span class="sp-icon">🏅</span>
+      <span><span class="sp-val" id="statDiscovered">0</span> / <span id="statTotal">30</span> found</span>
+    </div>
+    <div class="stat-pill">
+      <span class="sp-icon">🔍</span>
+      <span>Threshold: <span class="sp-val" id="statThresh">300m</span></span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOAST CONTAINER
+  ════════════════════════════════════════════════════════════ -->
+  <div id="toastContainer"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCRIPTS (order matters)
+  ════════════════════════════════════════════════════════════ -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="game.js"></script>
+  <script src="leaderboard.js"></script>
+  <script src="app.js"></script>
+
+  <!-- Register Service Worker for PWA/offline -->
   <script>
-    let map;
-    let service;
-    let unlocked = false;
-
-    function initMap() {
-      // Start location (Kochi)
-      const center = { lat: 9.9312, lng: 76.2673 };
-
-      // Roads-only style
-      const styledMap = new google.maps.StyledMapType(
-        [
-          { featureType: "poi", stylers: [{ visibility: "off" }] },
-          { featureType: "transit", stylers: [{ visibility: "off" }] }
-        ],
-        { name: "Roads Only" }
-      );
-
-      // Map init
-      map = new google.maps.Map(document.getElementById("map"), {
-        center,
-        zoom: 15,
-        mapTypeControlOptions: {
-          mapTypeIds: ["roadmap", "styled_map"],
-        },
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
       });
-
-      // Apply style
-      map.mapTypes.set("styled_map", styledMap);
-      map.setMapTypeId("styled_map");
-
-      // Places Service
-      service = new google.maps.places.PlacesService(map);
     }
-
-    // Unlock POIs when button clicked
-    document.getElementById("unlockBtn").addEventListener("click", () => {
-      if (unlocked) return;
-      unlocked = true;
-
-      const request = {
-        location: { lat: 9.9312, lng: 76.2673 },
-        radius: 500,
-        type: ["restaurant"]
-      };
-
-      service.nearbySearch(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          results.forEach(place => {
-            new google.maps.Marker({
-              map,
-              position: place.geometry.location,
-              title: place.name,
-            });
-          });
-        }
-      });
-    });
-
-    // Init map after script loads
-    window.initMap = initMap;
   </script>
+
 </body>
 </html>
